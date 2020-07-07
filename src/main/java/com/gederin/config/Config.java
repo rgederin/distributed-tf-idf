@@ -1,5 +1,7 @@
 package com.gederin.config;
 
+import com.gederin.tfidf.TFIDF;
+
 import org.I0Itec.zkclient.ZkClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -32,6 +34,11 @@ public class Config {
     @Bean
     public RestTemplate restTemplate(){
         return new RestTemplate();
+    }
+
+    @Bean
+    public TFIDF tfidf (){
+        return new TFIDF();
     }
 
     public String getHostPort() {
