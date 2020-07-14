@@ -38,48 +38,40 @@ public class SearchDocumentsV2Service {
         log.info("master node starts documents search ...");
 
         List<String> workers = getWorkerNodes();
-        int workersNumber = workers.size();
-
-        log.info("number of workers node in the cluster: {}", workersNumber);
+        log.info("number of workers node in the cluster: {}", workers.size());
 
         List<String> terms = tfidf.getWordsFromLine(searchDocumentsRequest.getSearchQuery());
-        List<String> documents = buildDocumentsList();
 
-        Map<String, List<String>> documentsPerWorker = splitDocumentsPerWorker(documents, workers, workersNumber);
-
+        Map<String, List<String>> documentsPerWorker = splitDocumentsPerWorker(createDocumentsList(), workers);
         log.info("documents for analysis per worker: {}", documentsPerWorker);
 
-
-        List<CompletableFuture<TermsFrequencyResponse>> termsFrequency = documentsPerWorker.entrySet().stream()
+        CompletableFuture[] termsFrequency = documentsPerWorker.entrySet()
+                .stream()
                 .map(entry -> requestSenderService.calculateTermsFrequency(terms, entry.getKey(), entry.getValue()))
-                .collect(Collectors.toList());
+                .toArray(CompletableFuture[]::new);
 
-        CompletableFuture.allOf(termsFrequency.stream().toArray(CompletableFuture[]::new));
+        CompletableFuture.allOf(termsFrequency);
+        Map<String, TermsFrequencyInDocument> termsFrequencyResult = mergeTermsFrequency(termsFrequency);
 
-
-
-        Map<String, TermsFrequencyInDocument> documentResults = new HashMap<>();
-
-
-        for (CompletableFuture<TermsFrequencyResponse> completableFuture : termsFrequency){
-            TermsFrequencyResponse response= completableFuture.get();
-
-            documentResults.putAll(response.getTermsFrequencyPerDocument());
-        }
-
-        System.out.println(documentResults);
-
-         return tfidf.getDocumentsScores(terms, documentResults);
+        return tfidf.getDocumentsScores(terms, termsFrequencyResult);
     }
 
+    private Map<String, TermsFrequencyInDocument> mergeTermsFrequency(CompletableFuture[] termsFrequency) throws ExecutionException, InterruptedException {
+        Map<String, TermsFrequencyInDocument> termsFrequencyResult = new HashMap<>();
 
+        for (CompletableFuture<TermsFrequencyResponse> completableFuture : termsFrequency) {
+            TermsFrequencyResponse response = completableFuture.get();
+            termsFrequencyResult.putAll(response.getTermsFrequencyPerDocument());
+        }
 
+        return termsFrequencyResult;
+    }
 
     private List<String> getWorkerNodes() {
         return clusterInformationService.getWorkerClusterNodes();
     }
 
-    private List<String> buildDocumentsList() throws FileNotFoundException {
+    private List<String> createDocumentsList() throws FileNotFoundException {
         File documentsDirectory = ResourceUtils.getFile("classpath:documents");
 
         return Arrays.stream(Objects.requireNonNull(documentsDirectory.list()))
@@ -87,8 +79,10 @@ public class SearchDocumentsV2Service {
                 .collect(Collectors.toList());
     }
 
-    private Map<String, List<String>> splitDocumentsPerWorker(List<String> documents, List<String> workers, int numberOfWorkers) {
+    private Map<String, List<String>> splitDocumentsPerWorker(List<String> documents, List<String> workers) {
+        int numberOfWorkers = workers.size();
         int numberOfDocumentsPerWorker = (documents.size() + numberOfWorkers - 1) / numberOfWorkers;
+
         Map<String, List<String>> workerDocuments = new HashMap<>();
 
         for (int i = 0; i < numberOfWorkers; i++) {
@@ -99,7 +93,7 @@ public class SearchDocumentsV2Service {
                 break;
             }
             List<String> currentWorkerDocuments = new ArrayList<>(documents.subList(firstDocumentIndex, lastDocumentIndexExclusive));
-            workerDocuments.put (workers.get(i), currentWorkerDocuments);
+            workerDocuments.put(workers.get(i), currentWorkerDocuments);
         }
 
         return workerDocuments;
