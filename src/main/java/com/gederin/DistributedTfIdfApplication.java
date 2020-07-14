@@ -11,9 +11,13 @@ import com.gederin.zookeeper.watcher.MasterChangeListener;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.event.ContextRefreshedEvent;
+import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.List;
+import java.util.concurrent.Executor;
 
 import javax.annotation.PreDestroy;
 
@@ -27,6 +31,7 @@ import static com.gederin.config.Config.LIVE_NODES;
 @SpringBootApplication
 @Slf4j
 @RequiredArgsConstructor
+@EnableAsync
 public class DistributedTfIdfApplication implements ApplicationListener<ContextRefreshedEvent> {
 
     private final Config config;
@@ -39,6 +44,19 @@ public class DistributedTfIdfApplication implements ApplicationListener<ContextR
 
     public static void main(String[] args) {
         SpringApplication.run(DistributedTfIdfApplication.class, args);
+    }
+
+    @Bean
+    public Executor taskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+
+        executor.setCorePoolSize(20);
+        executor.setMaxPoolSize(20);
+        executor.setQueueCapacity(500);
+        executor.setThreadNamePrefix("tf-calculator-");
+        executor.initialize();
+
+        return executor;
     }
 
 
@@ -54,13 +72,13 @@ public class DistributedTfIdfApplication implements ApplicationListener<ContextR
     }
 
     @PreDestroy
-    private void destroy(){
+    private void destroy() {
         zookeeperService.closeConnection();
     }
 
     /**
-     * Add application to zookeeper cluster by creating persistent znode under /all_nodes path.
-     * Name of the znode will be host:port
+     * Add application to zookeeper cluster by creating persistent znode under /all_nodes path. Name
+     * of the znode will be host:port
      */
     private void addCurrentNodeToAllNodesList() {
         zookeeperService.createAndAddToAllNodes(config.getHostPort(), "cluster node");
@@ -104,7 +122,7 @@ public class DistributedTfIdfApplication implements ApplicationListener<ContextR
     /**
      * Register all needful zookeeper watchers
      */
-    private void registerZookeeperWatchers (){
+    private void registerZookeeperWatchers() {
         zookeeperService.registerChildrenChangeWatcher(ELECTION_NODE, masterChangeListener);
         zookeeperService.registerChildrenChangeWatcher(LIVE_NODES, liveClusterNodesChangeListener);
         zookeeperService.registerChildrenChangeWatcher(ALL_NODES, allClusterNodesChangeListener);

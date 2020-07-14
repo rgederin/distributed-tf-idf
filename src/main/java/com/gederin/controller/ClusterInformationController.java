@@ -11,7 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @RestController
-@RequestMapping("v1/cluster/info")
+@RequestMapping("cluster/info")
 @RequiredArgsConstructor
 @Slf4j
 public class ClusterInformationController {

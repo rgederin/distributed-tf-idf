@@ -52,6 +52,4 @@ public class ClusterInformationService {
     public String getMasterNode() {
         return clusterInformationRepository.getMasterNode();
     }
-
-
 }
